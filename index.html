@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List Firebase</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(to right, rgb(243, 163, 243) , white);
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            margin-top: 80px; /* Memberi ruang untuk navbar tetap di atas */
+        }
+
+        /* Navbar fixed di atas */
+        .navbar {
+            background: violet;
+            border-radius: 10px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 5px;
+        }
+
+        .navbar-brand {
+            color: #fff !important;
+            font-weight: bold;
+        }
+
+        .navbar .btn {
+            color: #fff;
+            border: 1px solid #fff;
+        }
+
+        /* Tombol Fixed "Tambah Kelompok" */
+        .add-group-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        /* Container utama, memberi ruang untuk navbar tetap di atas */
+        .container {
+            max-width: 1200px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn {
+            border-radius: 20px;
+        }
+
+        .list-group-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 3px;
+            padding: 5px;
+        }
+
+        .edit-input {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .todo-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .todo-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        *{
+            /* border: 1px solid red; */
+        }
+    </style>
+</head>
+
+<body >
+    <div id="app">
+        <!-- Navbar -->
+        <nav class="navbar navbar-expand-lg navbar-light">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">📝 Todo List Firebase</a>
+                <button v-if="user" @click="logout" class="btn btn-sm btn-danger">
+                    <i class="fas fa-sign-out-alt icon"></i>Logout
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Container -->
+        <div class="container-fluid">
+            <!-- Login/Register Section -->
+            <div v-if="!user">
+                <h2 class="text-center text-primary">🎉 Login / Register 🎉</h2>
+                <input v-model="email" class="form-control mb-2" type="email" placeholder="Email">
+                <input v-model="password" class="form-control mb-2" type="password" placeholder="Password">
+                <button @click="register" class="btn btn-success w-100">
+                    <i class="fas fa-user-plus icon"></i>Register
+                </button>
+                <button @click="login" class="btn btn-primary w-100 mt-2">
+                    <i class="fas fa-sign-in-alt icon"></i>Login
+                </button>
+            </div>
+
+            <!-- Todo List Section -->
+            <div v-else>
+                <div class="input-group mb-2 " style="position: fixed;z-index: 1000; padding-right: 20px;">
+                    <input v-model="newGroupTitle" type="text" style="background-color: lightgray;" class="form-control" placeholder="Tambahkan judul kelompok todo">
+                    <button @click="addTodoGroup" class="btn btn-success">
+                        <i class="fas fa-plus icon"></i>Tambah Kelompok
+                    </button>
+                </div>
+                <br><br>
+                <!-- Tombol untuk membuka/tutup semua accordion -->
+                <button @click="toggleAll" class="btn btn-info mb-3">
+                    <i class="fas fa-toggle-on"></i> Toggle Semua
+                </button>
+
+
+                <!-- Accordion Grid for Todo Groups -->
+                <div class="todo-grid">
+                    <div v-for="(group, index) in todoGroups" :key="group.id" class="accordion-item">
+                        <div class="accordion-header" :id="'heading' + group.id" style="background-color: lightblue; border-radius: 30px; padding: 5px;">
+                            <button class="accordion-button mb-2 mx-2" type="button" data-bs-toggle="collapse"
+                                :data-bs-target="'#collapse' + group.id" aria-expanded="true"
+                                :aria-controls="'collapse' + group.id">
+                                {{ group.title }}
+                            </button>
+                        </div>
+
+                        <div :id="'collapse' + group.id" class="accordion-collapse collapse mt-2 px-3" :aria-labelledby="'heading' + group.id"
+                            data-bs-parent="#todoAccordion">
+                            <div class="accordion-body">
+                                <!-- Add New Todo -->
+                                <div class="input-group mb-3">
+                                    <input v-model="group.newTodo" type="text" class="form-control" placeholder="Tambahkan todo">
+                                    <button @click="addTodo(group)" class="btn btn-success">
+                                        <i class="fas fa-plus icon"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Todo List -->
+                                <ul class="list-group">
+                                    <li v-for="todo in group.todos" :key="todo.id" class="list-group-item">
+                                        <input v-if="todo.editing" v-model="todo.text" class="form-control edit-input">
+                                        <span v-else>{{ todo.text }}</span>
+                                        <div>
+                                            <button @click="editTodo(todo)" class="btn btn-warning btn-sm" style="font-size: 10px;">
+                                                <i class="fas fa-edit icon"></i>
+                                            </button>
+                                            <button @click="saveTodo(todo)" v-if="todo.editing" class="btn btn-success btn-sm">
+                                                <i class="fas fa-check icon"></i>Simpan
+                                            </button>
+                                            <button @click="confirmDelete(todo.id)" class="btn btn-danger btn-sm" style="font-size: 10px;">
+                                                <i class="fas fa-trash icon"></i>
+                                            </button>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
+    </div>
+    <!-- Konfigurasi API Key -->
+    <script src="config.js"></script>
+
+    <!-- Bootstrap JS for Accordion Functionality -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+
+</html>
